@@ -361,7 +361,7 @@ var PL=[25,20,15,10,5,2.5,1.25];
 var PD={'25':[72,14,'--p-red'],'20':[72,13,'--p-blue'],'15':[62,12,'--p-yellow'],'10':[52,11,'--p-green'],'5':[42,10,'--p-white'],'2.5':[34,9,'--p-black'],'1.25':[28,8,'--p-black']};
 
 /* ---------- Zustand ---------- */
-function fresh(){return {v:1,t:0,set:{rest:90,bar:20,goal:3,plan:'ppl',kcal:2400,prot:140,water:2500},w:[],bw:[],act:null,cus:[],cf:[],fv:[],mm:[],rh:[],pf:{sex:'m',age:0,h:0,w:0,act:1.55,g:0}}}
+function fresh(){return {v:1,t:0,set:{rest:90,bar:20,goal:3,plan:'ppl',kcal:2400,prot:140,water:2500},w:[],bw:[],act:null,cus:[],cf:[],fv:[],mm:[],rh:[],pf:{sex:'m',age:0,h:0,w:0,act:1.55,g:0},cd:[]}}
 function norm(r){var f=fresh();var s=Object.assign(f.set,r.set||{});return Object.assign(f,r,{set:s})}
 function load(){try{var r=JSON.parse(localStorage.getItem(LS));if(r&&r.v===1)return norm(r)}catch(e){}return fresh()}
 var S=load();
@@ -550,6 +550,81 @@ async function onCode(code){
 
 
 
+/* ---------- Ausdauer ---------- */
+var CDT=[
+ {id:'lauf',n:'Laufen',met:[7,9.8,12]},
+ {id:'rad',n:'Radfahren',met:[5.8,8,10]},
+ {id:'schw',n:'Schwimmen',met:[5.8,8,10]},
+ {id:'rud',n:'Rudern',met:[4.8,7,8.5]},
+ {id:'geh',n:'Gehen / Wandern',met:[3.5,4.5,6]},
+ {id:'cross',n:'Crosstrainer',met:[5,6.5,8.5]},
+ {id:'sonst',n:'Sonstiges',met:[4,6,8]}
+];
+var CDL=['Locker','Mittel','Hart'];
+function cdType(id){return CDT.find(function(t){return t.id===id})||CDT[CDT.length-1]}
+function cdEst(c){
+  var m=+c.m||0;if(!(m>0))return 0;
+  var T=cdType(c.t),met=T.met[c.lv==null?1:c.lv],km=+c.km||0;
+  if(T.id==='lauf'&&km>0){var sp=km/(m/60);met=Math.max(6,Math.min(16,sp))}
+  return Math.round(met*bodyKg()*m/60);
+}
+function cdDays(){return (S.cd||[]).filter(function(c){return c.m>=20}).map(function(c){return c.d})}
+function cdOn(k){return (S.cd||[]).filter(function(c){return c.d===k})}
+function cdLine(c){return cdType(c.t).n+' · '+c.m+' Min'+(c.km>0?' · '+nf(c.km,1)+' km':'')+' · ca. '+nf(c.k,0)+' kcal'}
+function cdTodayCard(){
+  var l=cdOn(todayK());if(!l.length)return '';
+  var m=l.reduce(function(a,c){return a+c.m},0),k=l.reduce(function(a,c){return a+c.k},0);
+  return '<button class="tcard" data-a="tab" data-t="verlauf"><span class="eyebrow">Ausdauer heute</span><span class="tc-n num"><b>'+m+'</b> Min</span><span class="hint num">'+esc(l.map(function(c){return cdType(c.t).n}).join(', '))+' · ca. '+nf(k,0)+' kcal</span></button>';
+}
+function cdFoodHint(){
+  var k=ui.fd||todayK(),l=cdOn(k);if(!l.length)return '';
+  return '<p class="hint num">Ausdauer an diesem Tag: ca. '+nf(l.reduce(function(a,c){return a+c.k},0),0)+' kcal verbraucht. Das ist nicht in dein Ziel eingerechnet.</p>';
+}
+function cdRes(){
+  var c=ui.cd,e=cdEst(c),k=parseFloat(c.k);
+  return e>0?'Geschätzter Verbrauch: <b>ca. '+nf(k>0?k:e,0)+' kcal</b>'+(k>0?' (von dir eingetragen)':' (Richtwert nach Dauer, Intensität und Körpergewicht)'):'Trage die Dauer ein, dann erscheint der Verbrauch.';
+}
+function drawCD(){
+  var m=$('#sheet'),c=ui.cd;m.hidden=false;
+  var body='<form data-form="cd" class="cus" style="border-top:0;padding-top:0">'+
+   '<p class="eyebrow">Sportart</p><div class="chips">'+CDT.map(function(t){return '<button type="button" class="ghost" data-a="cdtype" data-v="'+t.id+'" aria-pressed="'+(c.t===t.id)+'">'+t.n+'</button>'}).join('')+'</div>'+
+   '<div class="g2" style="grid-template-columns:repeat(2,minmax(0,1fr))"><input class="field" id="cdm" type="number" inputmode="numeric" min="1" max="1000" placeholder="Minuten" value="'+esc(c.m)+'" data-in="cdm" aria-label="Dauer in Minuten"><input class="field" id="cdkm" type="number" inputmode="decimal" min="0" step="0.1" placeholder="Kilometer (optional)" value="'+esc(c.km)+'" data-in="cdkm" aria-label="Strecke in Kilometern"></div>'+
+   '<p class="eyebrow">Intensität</p><div class="chips">'+CDL.map(function(n,i){return '<button type="button" class="ghost" data-a="cdlv" data-v="'+i+'" aria-pressed="'+(c.lv===i)+'">'+n+'</button>'}).join('')+'</div>'+
+   '<div class="g2" style="grid-template-columns:repeat(2,minmax(0,1fr))"><input class="field" id="cdk" type="number" inputmode="numeric" min="0" placeholder="kcal (optional, z. B. von der Uhr)" value="'+esc(c.k)+'" data-in="cdk" aria-label="Kalorien selbst eintragen"><input class="field" id="cdd" type="date" max="'+todayK()+'" value="'+esc(c.d)+'" data-in="cdd" aria-label="Datum"></div>'+
+   '<p class="num" id="cdres">'+cdRes()+'</p>'+
+   '<div class="row"><button class="btn" type="submit" style="flex:1">Eintragen</button><button class="ghost" type="button" data-a="cdclose">Abbrechen</button></div></form>';
+  m.innerHTML='<div class="sheet-bg" data-a="cdclose"></div><div class="sheet-p" role="dialog" aria-label="Ausdauer eintragen"><div class="sheet-in"><div class="row between"><h2 class="h2">Ausdauer</h2><button class="ghost sm" data-a="cdclose">Schließen</button></div>'+body+'</div></div>';
+}
+function cdSubmit(){
+  var c=ui.cd;if(!c)return;
+  var m=Math.round(+c.m||0);
+  if(!(m>=1&&m<=1000)){toast('Gib die Dauer in Minuten ein.');return}
+  var k=Math.round(parseFloat(c.k)>0?parseFloat(c.k):cdEst(c));
+  var d=/^\d{4}-\d{2}-\d{2}$/.test(c.d)&&c.d<=todayK()?c.d:todayK();
+  S.cd.push({id:'cd_'+Date.now().toString(36),d:d,ts:Date.now(),t:c.t,m:m,km:Math.max(0,+c.km||0),lv:c.lv,k:k});
+  S.cd.sort(function(a,b){return a.d<b.d?-1:a.d>b.d?1:a.ts-b.ts});
+  save();$('#sheet').hidden=true;$('#sheet').innerHTML='';ui.cd=null;render();toast('Ausdauer eingetragen.');
+}
+function cdSection(){
+  var h='<section class="sec"><h2 class="h2">Ausdauer</h2>';
+  if(!S.cd.length)return h+'<p class="hint">Noch kein Ausdauertraining eingetragen.</p><button class="ghost" data-a="cdopen">Ausdauer eintragen</button></section>';
+  var wk=weekKey(Date.now()),mins=new Map(),i;
+  S.cd.forEach(function(c){var k=weekKey(+dateOf(c.d));mins.set(k,(mins.get(k)||0)+c.m)});
+  var bars=[];for(i=7;i>=0;i--){var k=pw(wk,i);bars.push({l:fds(k),v:mins.get(k)||0})}
+  var wl=S.cd.filter(function(c){return weekKey(+dateOf(c.d))===wk});
+  var wm=wl.reduce(function(a,c){return a+c.m},0),wkm=wl.reduce(function(a,c){return a+c.km},0),wk2=wl.reduce(function(a,c){return a+c.k},0);
+  h+='<div class="stats"><div><b>'+wm+'</b><span>Min diese Woche</span></div><div><b>'+nf(wkm,1)+'</b><span>km diese Woche</span></div><div><b>'+nf(wk2,0)+'</b><span>kcal ca.</span></div></div>';
+  h+=barChart(bars,function(v){return nf(v,0)})+'<p class="hint">Minuten pro Woche. Einheiten ab 20 Minuten zählen zu deinem Wochenziel. Kalorien sind Richtwerte.</p>';
+  h+='<div class="hist">'+S.cd.slice().reverse().slice(0,ui.cdn||5).map(function(c){
+    var sure=ui.conf==='cd'+c.id;
+    return '<div class="fe"><div><b>'+esc(cdType(c.t).n)+'</b><small>'+fd(+dateOf(c.d))+' · '+c.m+' Min'+(c.km>0?' · '+nf(c.km,1)+' km':'')+' · '+CDL[c.lv==null?1:c.lv]+'</small></div><span class="v">'+nf(c.k,0)+'</span><button class="ghost sm warn'+(sure?' sure':'')+'" data-a="cddel" data-id="'+c.id+'" aria-label="Eintrag löschen">'+(sure?'Sicher?':'×')+'</button></div>';
+  }).join('')+'</div>';
+  if(S.cd.length>(ui.cdn||5))h+='<button class="ghost" data-a="cdmore">Ältere anzeigen</button>';
+  return h+'<button class="ghost" data-a="cdopen">Ausdauer eintragen</button></section>';
+}
+
+
+
 var smpState='ok';
 function initSample(){SMP=GEM;SMPIMG=true;SMPMAX=3;smpState='ok'}
 
@@ -572,7 +647,7 @@ function lastSets(x){for(var i=S.w.length-1;i>=0;i--){var e=S.w[i].e.find(functi
 function bests(){var m={};S.w.forEach(function(w){w.e.forEach(function(e){e.s.forEach(function(s){var sc=score(e.x,s[0],s[1]);if(sc>0&&(!m[e.x]||sc>m[e.x].sc))m[e.x]={sc:sc,kg:s[0],reps:s[1],t:+new Date(w.d)}})})});return m}
 function series(x){var out=[];S.w.forEach(function(w){var e=w.e.find(function(e){return e.x===x});if(!e)return;var b=0,bs=null;e.s.forEach(function(s){var sc=score(x,s[0],s[1]);if(sc>b){b=sc;bs=s}});if(b>0)out.push({t:+new Date(w.d),y:b,s:bs})});return out}
 function trained(){var c={};S.w.forEach(function(w){w.e.forEach(function(e){c[e.x]=(c[e.x]||0)+1})});return Object.keys(c).filter(function(x){return series(x).length>0}).sort(function(a,b){return c[b]-c[a]})}
-function weekCounts(){var m=new Map();S.w.forEach(function(w){var k=weekKey(+new Date(w.d));m.set(k,(m.get(k)||0)+1)});return m}
+function weekCounts(){var m=new Map();S.w.forEach(function(w){var k=weekKey(+new Date(w.d));m.set(k,(m.get(k)||0)+1)});(S.cd||[]).forEach(function(c){if(c.m>=20){var k=weekKey(+dateOf(c.d));m.set(k,(m.get(k)||0)+1)}});return m}
 function streak(){var m=weekCounts(),k=weekKey(Date.now());if(!m.has(k))k=pw(k);var n=0;while(m.has(k)){n++;k=pw(k)}return n}
 function nextDay(){var plan=PLANS.find(function(p){return p.id===S.set.plan})||PLANS[0],di=0;for(var k=S.w.length-1;k>=0;k--){if(S.w[k].p===plan.id&&S.w[k].di!=null){di=(S.w[k].di+1)%plan.days.length;break}}return {plan:plan,di:di}}
 function toast(msg){var t=$('#toast');t.textContent=msg;t.hidden=false;clearTimeout(tt);tt=setTimeout(function(){t.hidden=true},2800)}
@@ -637,7 +712,7 @@ function barChart(bars,fmt,goal){
 
 /* ---------- Ansichten ---------- */
 function weekStrip(){
-  var wk=weekKey(Date.now()),days=new Set(S.w.map(function(w){return dkey(+new Date(w.d))})),tk=dkey(Date.now()),L=['Mo','Di','Mi','Do','Fr','Sa','So'],h='';
+  var wk=weekKey(Date.now()),days=new Set(S.w.map(function(w){return dkey(+new Date(w.d))}).concat(cdDays())),tk=dkey(Date.now()),L=['Mo','Di','Mi','Do','Fr','Sa','So'],h='';
   for(var i=0;i<7;i++){var d=new Date(wk);d.setDate(d.getDate()+i);var k=dkey(+d);h+='<div class="wd'+(days.has(k)?' did':'')+(k===tk?' today':'')+'"><i></i>'+L[i]+'</div>'}
   var n=weekCounts().get(wk)||0;
   return '<div class="sec"><div class="week" aria-label="Diese Woche">'+h+'</div><p class="hint num">'+n+' von '+S.set.goal+' Einheiten diese Woche · '+streak()+' '+(streak()===1?'Woche':'Wochen')+' in Folge</p></div>';
@@ -650,7 +725,7 @@ function vToday(){
   if(ui.sum){var s=ui.sum;h+='<div class="card sec"><p class="eyebrow">Training gespeichert</p><div class="sum"><div><b>'+s.sets+'</b><span>Sätze</span></div><div><b>'+nf(s.vol/1000,1)+' t</b><span>Volumen</span></div><div><b>'+s.prs+'</b><span>'+(s.prs===1?'Rekord':'Rekorde')+'</span></div></div></div>'}
   h+='<div class="next"><p class="eyebrow">Als Nächstes · '+esc(nd.plan.n)+'</p><h1 class="h1">'+esc(day.n)+'</h1><ul class="exl">'+day.ex.map(function(x){var e=getEx(x);return '<li>'+plate(e.g)+esc(e.n)+'</li>'}).join('')+'</ul>';
   h+='<button class="btn" data-a="start" data-p="'+nd.plan.id+'" data-d="'+nd.di+'">Training starten</button></div>';
-  h+='<div class="sec"><p class="eyebrow">Anderer Tag oder frei</p><div class="chips">'+nd.plan.days.map(function(d,i){return i===nd.di?'':'<button class="ghost" data-a="start" data-p="'+nd.plan.id+'" data-d="'+i+'">'+esc(d.n)+'</button>'}).join('')+'<button class="ghost" data-a="free">Freies Training</button></div></div>';
+  h+='<div class="sec"><p class="eyebrow">Anderer Tag oder frei</p><div class="chips">'+nd.plan.days.map(function(d,i){return i===nd.di?'':'<button class="ghost" data-a="start" data-p="'+nd.plan.id+'" data-d="'+i+'">'+esc(d.n)+'</button>'}).join('')+'<button class="ghost" data-a="free">Freies Training</button><button class="ghost" data-a="cdopen">Ausdauer eintragen</button></div></div>';
   return h+'</div>';
 }
 function exCard(e,i){
@@ -687,7 +762,7 @@ function vPlans(){
   return h+'</div>';
 }
 function vProg(){
-  if(!S.w.length&&!S.bw.length){
+  if(!S.w.length&&!S.bw.length&&!S.cd.length){
     return '<div class="stack"><h1 class="h1">Verlauf</h1><div class="card empty"><p class="eyebrow">Noch keine Daten</p><p>Hier erscheinen deine Wochenvolumen, der Kraftverlauf pro Übung, Rekorde und dein Körpergewicht. Starte ein Training oder sieh dir die App mit Beispieldaten an.</p><button class="ghost" data-a="sample">Beispieldaten laden</button></div>'+kneeSection()+bwSection()+'</div>';
   }
   var wk=weekKey(Date.now()),m=weekCounts(),vols=new Map();
@@ -704,6 +779,7 @@ function vProg(){
     '<p class="hint num">Geschätztes Maximum für eine Wiederholung (Epley)'+(ex.bw?', inklusive Körpergewicht':'')+'. '+(se.length>1?'Seit '+fds(first.t)+': '+(dlt>=0?'+':'')+nf(dlt,1)+' kg.':'Ein Eintrag bisher.')+'</p></section>';
   }
   h+=muscleSection();
+  h+=cdSection();
   h+=kneeSection();
   h+=bwSection();
   var b=bests(),keys=Object.keys(b).sort(function(x,y){return b[y].t-b[x].t});
@@ -1004,6 +1080,7 @@ function vFood(){
   var h='<div class="stack"><div class="sec"><h1 class="h1">Essen</h1><div class="daynav"><button class="ghost sm" data-a="fday" data-v="-1" aria-label="Vorheriger Tag">‹</button><b>'+esc(lbl)+'</b><button class="ghost sm" data-a="fday" data-v="1" aria-label="Nächster Tag"'+(k>=todayK()?' disabled':'')+'>›</button></div></div>';
   h+='<section class="kcard">'+ring(T,goal)+'<div class="kside"><div><p class="eyebrow">'+(left>=0?'Noch übrig':'Über dem Ziel')+'</p><b class="num'+(left<0?' over':'')+'">'+nf(Math.abs(left),0)+'<small> kcal</small></b></div>'+
     '<div class="leg"><div><i style="background:var(--p-blue)"></i><span>Eiweiß</span><b class="num">'+nf(T.p,0)+' / '+nf(pg,0)+' g</b></div><div><i style="background:var(--p-yellow)"></i><span>Kohlenhydrate</span><b class="num">'+nf(T.c,0)+' g</b></div><div><i style="background:var(--p-red)"></i><span>Fett</span><b class="num">'+nf(T.f,0)+' g</b></div></div></div></section>';
+  h+=cdFoodHint();
   h+='<div class="row"><button class="btn" data-a="fsopen" style="flex:1">Lebensmittel hinzufügen</button><button class="ghost" data-a="scan">Barcode scannen</button></div>';
   h+='<section class="card sec"><h2 class="h2">Foto-Schätzung</h2>';
   if(SMP){
@@ -1036,6 +1113,7 @@ function todayCards(){
     var last=S.rh[S.rh.length-1],done=last&&last.d===k;
     h+='<button class="tcard" data-a="kneego"><span class="eyebrow">Knie-Check</span><span class="tc-n">'+(done?'Heute erledigt':'Heute noch offen')+'</span><span class="hint num">'+(last?'Zuletzt: Schmerz '+last.pain+'/10'+(last.fl?', Beugung '+last.fl+'°':'')+' am '+fds(dateOf(last.d).getTime()):'Noch kein Eintrag. Schmerz, Schwellung und Beweglichkeit festhalten.')+'</span></button>';
   }
+  h+=cdTodayCard();
   return '<div class="sec" style="gap:10px">'+h+'</div>';
 }
 function muscleSection(){
@@ -1342,6 +1420,7 @@ document.addEventListener('submit',function(ev){
   }else if(f==='knee'){
     var kd=todayK(),en={d:kd,pain:+$('#kp').value||0,sw:$('#ks').value,fl:+$('#kf').value||0,ex:+$('#ke').value||0,n:$('#kn').value.trim().slice(0,120)};
     S.rh=S.rh.filter(function(x){return x.d!==kd});S.rh.push(en);S.rh.sort(function(a,b){return a.d<b.d?-1:1});save();ui.kopen=false;render();toast('Knie-Check gespeichert.');
+  }else if(f==='cd'){cdSubmit();
   }else if(f==='cus'){
     var n=$('#pcn').value.trim();if(!n){toast('Gib der Übung einen Namen.');return}
     var ex={id:'c_'+Date.now().toString(36),n:n.slice(0,40),g:$('#pcg').value};S.cus.push(ex);addEx(ex.id);
@@ -1396,6 +1475,20 @@ Object.assign(I,{
       if(code&&/^\d{8,14}$/.test(code)){scn.busy=false;onCode(code)}else scanMsg('Im Foto wurde kein Barcode erkannt. Näher ran, scharf und gerade, oder Code eintippen.');
     }catch(e){scanMsg('Das Foto konnte nicht gelesen werden.')}
   }
+});
+Object.assign(A,{
+  cdopen:function(){ui.cd={t:'lauf',m:'',km:'',lv:1,k:'',d:todayK()};drawCD()},
+  cdclose:function(){$('#sheet').hidden=true;$('#sheet').innerHTML='';ui.cd=null},
+  cdtype:function(el){ui.cd.t=el.dataset.v;drawCD()},
+  cdlv:function(el){ui.cd.lv=+el.dataset.v;drawCD()},
+  cddel:function(el){var id=el.dataset.id;conf('cd'+id,function(){S.cd=S.cd.filter(function(c){return c.id!==id});save();render()})},
+  cdmore:function(){ui.cdn=(ui.cdn||5)+10;render()}
+});
+Object.assign(I,{
+  cdm:function(el){ui.cd.m=el.value;$('#cdres').innerHTML=cdRes()},
+  cdkm:function(el){ui.cd.km=el.value;$('#cdres').innerHTML=cdRes()},
+  cdk:function(el){ui.cd.k=el.value;$('#cdres').innerHTML=cdRes()},
+  cdd:function(el){ui.cd.d=el.value}
 });
 initSample();
 initDownloads();
