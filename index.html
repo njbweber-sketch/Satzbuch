@@ -278,6 +278,20 @@ details.card form{display:flex;flex-direction:column;gap:8px;margin-top:12px}
 #scan .sc-msg{position:absolute;left:16px;right:16px;top:58%;text-align:center;color:#fff;font-size:15px;text-shadow:0 1px 3px #000}
 #scan .sc-bot{padding:12px 16px calc(16px + env(safe-area-inset-bottom,0px));background:var(--surface);color:var(--ink);display:flex;flex-direction:column;gap:10px}
 .lnk2{color:var(--p-blue);text-decoration:underline}
+.cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.cal-h{font:400 11px/1 var(--f-mono);color:var(--muted);text-align:center;padding-bottom:2px}
+.cal-d{display:flex;flex-direction:column;align-items:center;justify-content:space-between;gap:4px;min-height:50px;padding:6px 2px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);font:500 14px/1 var(--f-mono);cursor:pointer}
+.cal-d.today{border-color:var(--ink);border-width:2px}
+.cal-d.sel{background:var(--tint)}
+.cal-d .dots{display:flex;gap:3px;flex-wrap:wrap;justify-content:center;min-height:9px}
+.cal-d .dots i{width:9px;height:9px;border-radius:50%;border:1px solid var(--line)}
+.cal-d .dots i.cdot{background:transparent;border:2px solid var(--p-blue)}
+.pe-ex{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 0;border-top:1px solid var(--line)}
+.pe-ex>span{display:flex;align-items:center;gap:8px;min-width:0;overflow-wrap:anywhere}
+.pe-ex small{color:var(--muted);font-size:12px;text-align:right}
+.lt{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.lt>div{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface)}
+.lt small{display:block;color:var(--muted);font-size:12px}
 
 </style>
 </head>
@@ -361,7 +375,7 @@ var PL=[25,20,15,10,5,2.5,1.25];
 var PD={'25':[72,14,'--p-red'],'20':[72,13,'--p-blue'],'15':[62,12,'--p-yellow'],'10':[52,11,'--p-green'],'5':[42,10,'--p-white'],'2.5':[34,9,'--p-black'],'1.25':[28,8,'--p-black']};
 
 /* ---------- Zustand ---------- */
-function fresh(){return {v:1,t:0,set:{rest:90,bar:20,goal:3,plan:'ppl',kcal:2400,prot:140,water:2500},w:[],bw:[],act:null,cus:[],cf:[],fv:[],mm:[],rh:[],pf:{sex:'m',age:0,h:0,w:0,act:1.55,g:0},cd:[]}}
+function fresh(){return {v:1,t:0,set:{rest:90,bar:20,goal:3,plan:'ppl',kcal:2400,prot:140,water:2500},w:[],bw:[],act:null,cus:[],cf:[],fv:[],mm:[],rh:[],pf:{sex:'m',age:0,h:0,w:0,act:1.55,g:0},cd:[],pl:[]}}
 function norm(r){var f=fresh();var s=Object.assign(f.set,r.set||{});return Object.assign(f,r,{set:s})}
 function load(){try{var r=JSON.parse(localStorage.getItem(LS));if(r&&r.v===1)return norm(r)}catch(e){}return fresh()}
 var S=load();
@@ -601,7 +615,7 @@ function cdSubmit(){
   if(!(m>=1&&m<=1000)){toast('Gib die Dauer in Minuten ein.');return}
   var k=Math.round(parseFloat(c.k)>0?parseFloat(c.k):cdEst(c));
   var d=/^\d{4}-\d{2}-\d{2}$/.test(c.d)&&c.d<=todayK()?c.d:todayK();
-  S.cd.push({id:'cd_'+Date.now().toString(36),d:d,ts:Date.now(),t:c.t,m:m,km:Math.max(0,+c.km||0),lv:c.lv,k:k});
+  S.cd.push({id:'cd_'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),d:d,ts:Date.now(),t:c.t,m:m,km:Math.max(0,+c.km||0),lv:c.lv,k:k});
   S.cd.sort(function(a,b){return a.d<b.d?-1:a.d>b.d?1:a.ts-b.ts});
   save();$('#sheet').hidden=true;$('#sheet').innerHTML='';ui.cd=null;render();toast('Ausdauer eingetragen.');
 }
@@ -623,6 +637,98 @@ function cdSection(){
   return h+'<button class="ghost" data-a="cdopen">Ausdauer eintragen</button></section>';
 }
 
+
+
+/* ---------- Eigene Pläne ---------- */
+function allPlans(){return PLANS.concat(S.pl||[])}
+function vPlans(){
+  if(ui.pe)return vPlanEd();
+  var h='<div class="stack"><div class="sec"><h1 class="h1">Pläne</h1><p class="hint">Der aktive Plan bestimmt, welcher Tag unter „Heute“ als Nächstes vorgeschlagen wird. Du kannst eigene Pläne erstellen oder einen vorhandenen als Vorlage kopieren.</p><button class="btn" data-a="pnew">Eigenen Plan erstellen</button></div>';
+  (S.pl||[]).concat(PLANS).forEach(function(p){
+    var on=S.set.plan===p.id;
+    h+='<section class="card plan"><div class="row between"><div><h2 class="h2">'+esc(p.n)+(p.u?' <small class="hint">(eigener Plan)</small>':'')+'</h2><p class="hint">'+esc(p.d)+'</p></div><button class="ghost sm'+(on?' on':'')+'" data-a="plan" data-p="'+esc(p.id)+'"'+(on?' aria-pressed="true"':'')+'>'+(on?'Aktiv':'Aktivieren')+'</button></div>'+(p.note?'<p class="note">'+esc(p.note)+'</p>':'');
+    p.days.forEach(function(d,i){
+      h+='<div class="day"><div><h3>'+esc(d.n)+'</h3><div class="pl-dots">'+d.ex.map(function(x){return plate(getEx(x).g)}).join('')+'</div><p>'+esc(d.ex.map(function(x){return getEx(x).n}).join(', '))+'</p></div><button class="ghost sm" data-a="start" data-p="'+esc(p.id)+'" data-d="'+i+'">Starten</button></div>';
+    });
+    h+='<div class="row" style="margin-top:10px"><button class="ghost sm" data-a="'+(p.u?'pedit':'pcopy')+'" data-p="'+esc(p.id)+'">'+(p.u?'Bearbeiten':'Als Vorlage kopieren')+'</button></div></section>';
+  });
+  return h+'</div>';
+}
+function vPlanEd(){
+  var p=ui.pe,h='<div class="stack"><div class="sec"><h1 class="h1">'+(p.id?'Plan bearbeiten':'Neuer Plan')+'</h1><p class="hint">Ein Plan besteht aus Trainingstagen, zum Beispiel Push, Pull und Legs. Sie kommen unter „Heute“ der Reihe nach dran.</p></div>';
+  h+='<section class="card sec"><input class="field" id="pen" type="text" maxlength="40" placeholder="Name des Plans" value="'+esc(p.n)+'" data-in="pen" aria-label="Name des Plans"></section>';
+  p.days.forEach(function(d,i){
+    h+='<section class="card sec"><div class="row" style="flex-wrap:nowrap"><input class="field" type="text" maxlength="30" placeholder="Name von Tag '+(i+1)+'" value="'+esc(d.n)+'" data-in="pdn" data-i="'+i+'" aria-label="Name von Tag '+(i+1)+'" style="flex:1;min-width:0">'+(p.days.length>1?'<button class="ghost sm warn" data-a="pdrm" data-i="'+i+'">Tag löschen</button>':'')+'</div>';
+    if(!d.ex.length)h+='<p class="hint">Noch keine Übungen.</p>';
+    d.ex.forEach(function(x,j){
+      var e=getEx(x);
+      h+='<div class="pe-ex"><span>'+plate(e.g)+esc(e.n)+'</span><span class="row" style="gap:4px;flex-wrap:nowrap"><button class="ghost sm" data-a="pexu" data-d="'+i+'" data-i="'+j+'" aria-label="Nach oben"'+(j===0?' disabled':'')+'>↑</button><button class="ghost sm" data-a="pexd" data-d="'+i+'" data-i="'+j+'" aria-label="Nach unten"'+(j===d.ex.length-1?' disabled':'')+'>↓</button><button class="ghost sm" data-a="pexrm" data-d="'+i+'" data-i="'+j+'" aria-label="Übung entfernen">×</button></span></div>';
+    });
+    h+='<button class="ghost" data-a="pexadd" data-d="'+i+'">Übung hinzufügen</button></section>';
+  });
+  h+='<button class="ghost" data-a="padd">Weiteren Tag hinzufügen</button>';
+  h+='<div class="row"><button class="btn" data-a="psave" style="flex:1">Plan speichern</button><button class="ghost" data-a="pcancel">Abbrechen</button></div>';
+  if(p.id)h+='<button class="ghost warn'+(ui.conf==='pd'+p.id?' sure':'')+'" data-a="pdel">'+(ui.conf==='pd'+p.id?'Wirklich löschen? Nochmal tippen':'Plan löschen')+'</button>';
+  return h+'</div>';
+}
+function peAdd(x){
+  var d=ui.pe.days[ui.pickDay];ui.pickDay=null;
+  $('#sheet').hidden=true;$('#sheet').innerHTML='';
+  if(d){d.ex.push(x);toast(getEx(x).n+' hinzugefügt')}
+  render();
+}
+function peSave(){
+  var p=ui.pe,n=(p.n||'').trim();
+  if(!n){toast('Gib dem Plan einen Namen.');return}
+  var days=p.days.map(function(d,i){return {n:(d.n||'').trim().slice(0,30)||('Tag '+(i+1)),ex:d.ex.slice()}}).filter(function(d){return d.ex.length});
+  if(!days.length){toast('Füge mindestens einem Tag eine Übung hinzu.');return}
+  var isNew=!p.id,id=p.id||('u_'+Date.now().toString(36)+Math.random().toString(36).slice(2,4));
+  var obj={id:id,u:1,n:n.slice(0,40),d:days.length+(days.length===1?' Tag':' Tage')+' im Wechsel, selbst erstellt',days:days};
+  S.pl=(S.pl||[]).filter(function(x){return x.id!==id});S.pl.unshift(obj);
+  if(isNew)S.set.plan=id;
+  ui.pe=null;ui.pickDay=null;save();render();window.scrollTo(0,0);
+  toast(isNew?'Plan gespeichert und aktiviert.':'Plan gespeichert.');
+}
+
+
+
+/* ---------- Kalender: was wann trainiert wurde ---------- */
+var MON=['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'];
+function mainGroup(w){var c={};w.e.forEach(function(e){var g=getEx(e.x).g;c[g]=(c[g]||0)+e.s.length});return Object.keys(c).sort(function(a,b){return c[b]-c[a]})[0]||'arme'}
+function agoTxt(t){var n=Math.round((+dateOf(todayK())-+dateOf(dkey(t)))/864e5);return n<=0?'heute':n===1?'gestern':'vor '+n+' Tagen'}
+function lastByGroup(){var m={};S.w.forEach(function(w){var t=+new Date(w.d);w.e.forEach(function(e){var g=getEx(e.x).g;if(!m[g]||m[g]<t)m[g]=t})});return m}
+function calDetail(k){
+  var ws=S.w.filter(function(w){return dkey(+new Date(w.d))===k}),cs=cdOn(k);
+  var h='<div class="card sec"><p class="eyebrow">'+esc(fd(+dateOf(k)))+'</p>';
+  if(!ws.length&&!cs.length)h+='<p class="hint">Kein Training an diesem Tag.</p>';
+  ws.forEach(function(w){
+    h+='<div><b>'+esc(w.n)+(w.s?' (Beispiel)':'')+'</b><small class="hint num"> · '+w.m+' Min · '+nsets(w)+' Sätze · '+nf(vol(w)/1000,1)+' t</small></div><div class="hist">'+
+      w.e.map(function(e){return '<div class="pe-ex"><span>'+plate(getEx(e.x).g)+esc(getEx(e.x).n)+'</span><small class="num">'+e.s.map(function(s){return fmtS(e.x,s)}).join(', ')+'</small></div>'}).join('')+'</div>';
+  });
+  cs.forEach(function(c){h+='<p>Ausdauer: '+esc(cdLine(c))+'</p>'});
+  return h+'</div>';
+}
+function calSection(){
+  var tk=todayK(),ym=ui.cm||ymOf(tk),p=ym.split('-'),y=+p[0],mo=+p[1]-1,lead=(new Date(y,mo,1).getDay()+6)%7,dim=new Date(y,mo+1,0).getDate(),i,d;
+  var wm={},cm={};
+  S.w.forEach(function(w){var k=dkey(+new Date(w.d));(wm[k]=wm[k]||[]).push(w)});
+  (S.cd||[]).forEach(function(c){(cm[c.d]=cm[c.d]||[]).push(c)});
+  var nW=0,nC=0,mins=0;
+  var h='<section class="sec"><h2 class="h2">Kalender</h2><div class="row between"><button class="ghost sm" data-a="calnav" data-v="-1" aria-label="Voriger Monat">‹</button><b>'+MON[mo]+' '+y+'</b><button class="ghost sm" data-a="calnav" data-v="1" aria-label="Nächster Monat"'+(ym>=ymOf(tk)?' disabled':'')+'>›</button></div><div class="cal">';
+  ['Mo','Di','Mi','Do','Fr','Sa','So'].forEach(function(l){h+='<span class="cal-h">'+l+'</span>'});
+  for(i=0;i<lead;i++)h+='<span></span>';
+  for(d=1;d<=dim;d++){
+    var k=ym+'-'+pad(d),ws=wm[k]||[],cs=cm[k]||[];
+    nW+=ws.length;nC+=cs.length;cs.forEach(function(c){mins+=c.m});
+    var dots=ws.map(function(w){return '<i style="background:var('+GROUPS[mainGroup(w)].c+')"></i>'}).join('')+cs.map(function(){return '<i class="cdot"></i>'}).join('');
+    h+='<button class="cal-d'+(k===tk?' today':'')+(k===ui.cday?' sel':'')+'" data-a="calday" data-k="'+k+'" aria-label="'+d+'. '+MON[mo]+(ws.length||cs.length?', Training':'')+'"><span>'+d+'</span><span class="dots">'+dots+'</span></button>';
+  }
+  h+='</div><p class="hint num">'+nW+' Krafteinheiten'+(nC?' · '+nC+' Ausdauer ('+mins+' Min)':'')+' in diesem Monat. Farbiger Punkt: Krafttraining, Farbe nach meist trainierter Muskelgruppe. Hohler blauer Punkt: Ausdauer. Tippe auf einen Tag für Details.</p>';
+  if(ui.cday)h+=calDetail(ui.cday);
+  var lb=lastByGroup();
+  h+='<h3 class="h2" style="font-size:20px">Zuletzt trainiert</h3><div class="lt">'+Object.keys(GROUPS).map(function(g){return '<div>'+plate(g)+'<span><b>'+GROUPS[g].n+'</b><small>'+(lb[g]?agoTxt(lb[g]):'noch nie')+'</small></span></div>'}).join('')+'</div></section>';
+  return h;
+}
 
 
 var smpState='ok';
@@ -649,7 +755,7 @@ function series(x){var out=[];S.w.forEach(function(w){var e=w.e.find(function(e)
 function trained(){var c={};S.w.forEach(function(w){w.e.forEach(function(e){c[e.x]=(c[e.x]||0)+1})});return Object.keys(c).filter(function(x){return series(x).length>0}).sort(function(a,b){return c[b]-c[a]})}
 function weekCounts(){var m=new Map();S.w.forEach(function(w){var k=weekKey(+new Date(w.d));m.set(k,(m.get(k)||0)+1)});(S.cd||[]).forEach(function(c){if(c.m>=20){var k=weekKey(+dateOf(c.d));m.set(k,(m.get(k)||0)+1)}});return m}
 function streak(){var m=weekCounts(),k=weekKey(Date.now());if(!m.has(k))k=pw(k);var n=0;while(m.has(k)){n++;k=pw(k)}return n}
-function nextDay(){var plan=PLANS.find(function(p){return p.id===S.set.plan})||PLANS[0],di=0;for(var k=S.w.length-1;k>=0;k--){if(S.w[k].p===plan.id&&S.w[k].di!=null){di=(S.w[k].di+1)%plan.days.length;break}}return {plan:plan,di:di}}
+function nextDay(){var plan=allPlans().find(function(p){return p.id===S.set.plan})||PLANS[0],di=0;for(var k=S.w.length-1;k>=0;k--){if(S.w[k].p===plan.id&&S.w[k].di!=null){di=(S.w[k].di+1)%plan.days.length;break}}return {plan:plan,di:di}}
 function toast(msg){var t=$('#toast');t.textContent=msg;t.hidden=false;clearTimeout(tt);tt=setTimeout(function(){t.hidden=true},2800)}
 function conf(key,fn){clearTimeout(ct);if(ui.conf===key){ui.conf=null;fn()}else{ui.conf=key;ct=setTimeout(function(){ui.conf=null;render()},3000);render()}}
 
@@ -748,7 +854,7 @@ function vActive(){
   '<button class="btn" data-a="finish">Training abschließen</button>'+
   '<button class="ghost warn'+(ui.conf==='discard'?' sure':'')+'" data-a="discard" style="width:100%">'+(ui.conf==='discard'?'Wirklich verwerfen?':'Training verwerfen')+'</button></div>';
 }
-function vPlans(){
+function vPlansOld(){
   var h='<div class="stack"><div class="sec"><h1 class="h1">Pläne</h1><p class="hint">Der aktive Plan bestimmt, welcher Tag unter „Heute“ als Nächstes vorgeschlagen wird.</p></div>';
   PLANS.forEach(function(p){
     var on=S.set.plan===p.id;
@@ -770,6 +876,7 @@ function vProg(){
   var bars=[];for(var i=7;i>=0;i--){var k=pw(wk,i);bars.push({l:fds(k),v:(vols.get(k)||0)/1000})}
   var h='<div class="stack"><h1 class="h1">Verlauf</h1>';
   h+='<div class="stats"><div><b>'+streak()+'</b><span>Wochen in Folge</span></div><div><b>'+(m.get(wk)||0)+'/'+S.set.goal+'</b><span>diese Woche</span></div><div><b>'+S.w.length+'</b><span>Einheiten gesamt</span></div></div>';
+  h+=calSection();
   h+='<section class="sec"><h2 class="h2">Volumen pro Woche</h2>'+barChart(bars,function(v){return nf(v,1)})+'<p class="hint">Summe aus Gewicht × Wiederholungen in Tonnen. Beschriftet ist jeweils der Montag.</p></section>';
   var tr=trained();
   if(tr.length){
@@ -1182,7 +1289,7 @@ function render(){
 /* ---------- Training ---------- */
 function newEx(x){var ex=getEx(x),l=lastSets(x),n=l?Math.max(3,Math.min(l.length,5)):3,s=[],dr=(!l&&ex.g==='reha')?(ex.t?30:10):'';for(var i=0;i<n;i++){var r=l&&(l[i]||l[l.length-1]);s.push({kg:r?r[0]:'',reps:r?r[1]:dr,done:0,pr:0})}return {x:x,s:s}}
 function startWorkout(pid,di){
-  var plan=PLANS.find(function(p){return p.id===pid}),day=plan&&plan.days[di];
+  var plan=allPlans().find(function(p){return p.id===pid}),day=plan&&plan.days[di];
   S.act={n:day?day.n:'Freies Training',p:day?pid:null,di:day?di:null,t0:Date.now(),e:(day?day.ex:[]).map(newEx)};
   ui.sum=null;save();
 }
@@ -1228,7 +1335,7 @@ function fillPicker(q){
   });
   $('#pl').innerHTML=any?h:'<p class="hint">Keine Übung gefunden. Lege unten eine eigene an.</p>';
 }
-function addEx(x){S.act.e.push(newEx(x));$('#sheet').hidden=true;$('#sheet').innerHTML='';save();render();toast(getEx(x).n+' hinzugefügt')}
+function addEx(x){if(ui.pe&&ui.pickDay!=null){peAdd(x);return}S.act.e.push(newEx(x));$('#sheet').hidden=true;$('#sheet').innerHTML='';save();render();toast(getEx(x).n+' hinzugefügt')}
 
 /* ---------- Aktionen ---------- */
 var A={
@@ -1251,7 +1358,7 @@ var A={
   rmset:function(el){var e=S.act.e[+el.dataset.i];if(e.s.length>1){e.s.pop();save();render()}},
   rmex:function(el){S.act.e.splice(+el.dataset.i,1);save();render()},
   addex:openPicker,
-  closepick:function(){$('#sheet').hidden=true;$('#sheet').innerHTML=''},
+  closepick:function(){ui.pickDay=null;$('#sheet').hidden=true;$('#sheet').innerHTML=''},
   pickex:function(el){addEx(el.dataset.x)},
   finish:finish,
   discard:function(){conf('discard',function(){S.act=null;rest=null;save();render()})},
@@ -1489,6 +1596,31 @@ Object.assign(I,{
   cdkm:function(el){ui.cd.km=el.value;$('#cdres').innerHTML=cdRes()},
   cdk:function(el){ui.cd.k=el.value;$('#cdres').innerHTML=cdRes()},
   cdd:function(el){ui.cd.d=el.value}
+});
+Object.assign(A,{
+  pnew:function(){ui.pe={id:null,n:'',days:[{n:'',ex:[]}]};render();window.scrollTo(0,0)},
+  pedit:function(el){var p=(S.pl||[]).find(function(x){return x.id===el.dataset.p});if(!p)return;ui.pe={id:p.id,n:p.n,days:p.days.map(function(d){return {n:d.n,ex:d.ex.slice()}})};render();window.scrollTo(0,0)},
+  pcopy:function(el){var p=PLANS.find(function(x){return x.id===el.dataset.p});if(!p)return;ui.pe={id:null,n:p.n+' (Kopie)',days:p.days.map(function(d){return {n:d.n,ex:d.ex.slice()}})};render();window.scrollTo(0,0)},
+  pcancel:function(){ui.pe=null;ui.pickDay=null;ui.conf=null;render();window.scrollTo(0,0)},
+  psave:peSave,
+  pdel:function(){var id=ui.pe&&ui.pe.id;if(!id)return;conf('pd'+id,function(){S.pl=(S.pl||[]).filter(function(x){return x.id!==id});if(S.set.plan===id)S.set.plan='ppl';ui.pe=null;save();render();window.scrollTo(0,0);toast('Plan gelöscht.')})},
+  padd:function(){ui.pe.days.push({n:'',ex:[]});render()},
+  pdrm:function(el){if(ui.pe.days.length>1){ui.pe.days.splice(+el.dataset.i,1);render()}},
+  pexadd:function(el){ui.pickDay=+el.dataset.d;openPicker()},
+  pexrm:function(el){ui.pe.days[+el.dataset.d].ex.splice(+el.dataset.i,1);render()},
+  pexu:function(el){var l=ui.pe.days[+el.dataset.d].ex,i=+el.dataset.i;if(i>0){var t=l[i];l[i]=l[i-1];l[i-1]=t;render()}},
+  pexd:function(el){var l=ui.pe.days[+el.dataset.d].ex,i=+el.dataset.i;if(i<l.length-1){var t=l[i];l[i]=l[i+1];l[i+1]=t;render()}}
+});
+Object.assign(I,{
+  pen:function(el){ui.pe.n=el.value},
+  pdn:function(el){ui.pe.days[+el.dataset.i].n=el.value}
+});
+Object.assign(A,{
+  calnav:function(el){
+    var ym=ui.cm||ymOf(todayK()),p=ym.split('-'),d=new Date(+p[0],+p[1]-1+(+el.dataset.v),1),nk=d.getFullYear()+'-'+pad(d.getMonth()+1);
+    if(nk>ymOf(todayK()))return;ui.cm=nk;ui.cday=null;render();
+  },
+  calday:function(el){ui.cday=ui.cday===el.dataset.k?null:el.dataset.k;render()}
 });
 initSample();
 initDownloads();
